@@ -1,7 +1,7 @@
 # PHP Version Switcher (PVS)
 
 PHP Version Switcher (PVS) Plugin for [Oh My Zsh](https://github.com/robbyrussell/oh-my-zsh). Automatically
-switches PHP versions based on .php-version files. Uses PATH manipulation for user-level version management.
+switches PHP versions based on `.php-version` files. Uses PATH manipulation for user-level version management.
 
 ## Install
 
@@ -22,21 +22,22 @@ Reload the shell.
 
 ### Switching versions
 
-To switch to a specific version, use `pvs_switch <version>`:
+To switch to a specific version, use `pvs_use [version]`:
 
 ```sh
-pvs_switch 8.2
+pvs_use     # switch to version defined in .php-version file
+pvs_use 8.2 # switch to specific version
 ```
 
 ### Creating .php-version files
 
-To create a `.php-version` file with a specific version, use `pvs_use <version>`:
+To create a `.php-version` file with a specific version, use `pvs_local <version>`:
 
 ```sh
-pvs_use 8.2
+pvs_local 8.2
 ```
 
-This will create a `.php-version` file with the specified version and switch to it.
+This will create a `.php-version` file with the specified version.
 
 ### Showing current status
 

@@ -99,27 +99,21 @@ pvs_is_version_installed() {
   [[ -x "${PVS_PHP_INSTALL_PATH}/php$version" ]]
 }
 
-# Create a temporary directory for PHP version links
-pvs_get_php_bin_dir() {
-  echo "$PVS_BIN_DIR"
-}
-
 # Setup PHP version in PATH
 pvs_setup_php_path() {
   local version=$1
-  local php_bin_dir=$(pvs_get_php_bin_dir)
 
   # Create directory if it doesn't exist
-  mkdir -p "$php_bin_dir"
+  mkdir -p "$PVS_BIN_DIR"
 
   # Remove old php symlink
-  rm -f "$php_bin_dir/php"
+  rm -f "$PVS_BIN_DIR/php"
 
   # Create new symlink
-  ln -sf "${PVS_PHP_INSTALL_PATH}/php$version" "$php_bin_dir/php"
+  ln -sf "${PVS_PHP_INSTALL_PATH}/php$version" "$PVS_BIN_DIR/php"
 
   # Update PATH to include our bin directory first
-  export PATH="$php_bin_dir:$PVS_ORIGINAL_PATH"
+  export PATH="$PVS_BIN_DIR:$PVS_ORIGINAL_PATH"
 }
 
 # Switch to specific PHP version
@@ -242,13 +236,22 @@ pvs_chpwd_hook() {
 # Utility Functions
 
 # Manually switch to specific version
-pvs_switch() {
+pvs_use() {
   local version=$1
 
   if [[ -z "$version" ]]; then
-    pvs_log "error" "Usage: pvs_switch <version>"
-    pvs_log "info" "Example: pvs_switch 8.2"
-    return 1
+    # Try to get version from .php-version file
+    local version_file=$(pvs_find_version_file)
+    if [[ -n "$version_file" ]]; then
+      version=$(pvs_read_version_file "$version_file")
+    fi
+
+    # If still no version, show usage
+    if [[ -z "$version" ]]; then
+      pvs_log "error" "Usage: pvs_use [version]"
+      pvs_log "info" "Example: pvs_use 8.2"
+      return 1
+    fi
   fi
 
   # Validate version format
@@ -261,12 +264,12 @@ pvs_switch() {
 }
 
 # Create .php-version file with specified version
-pvs_use() {
+pvs_local() {
   local version=$1
 
   if [[ -z "$version" ]]; then
-    pvs_log "error" "Usage: pvs_use <version>"
-    pvs_log "info" "Example: pvs_use 8.1"
+    pvs_log "error" "Usage: pvs_local <version>"
+    pvs_log "info" "Example: pvs_local 8.1"
     return 1
   fi
 
@@ -286,9 +289,6 @@ pvs_use() {
   # Create .php-version file
   echo "$version" >"$PVS_VERSION_FILE"
   pvs_log "success" "Created $PVS_VERSION_FILE with PHP $version"
-
-  # Switch to the version immediately
-  pvs_switch_to_version "$version"
 }
 
 # Show current status and available versions
@@ -303,7 +303,7 @@ pvs_info() {
   local current_php_path=$(which php 2>/dev/null)
   echo "Current PHP path: ${current_php_path:-"not found"}"
 
-  echo "PHP symlinks stored in: $(pvs_get_php_bin_dir)"
+  echo "PHP symlinks stored in: $PVS_BIN_DIR"
 
   local version_file=$(pvs_find_version_file)
   if [[ -n "$version_file" ]]; then
@@ -338,7 +338,7 @@ pvs_info() {
   echo "- PVS_PHP_INSTALL_PATH: $PVS_PHP_INSTALL_PATH"
   echo "- PVS_AUTO_SWITCH: $PVS_AUTO_SWITCH"
   echo "- PVS_QUIET_MODE: $PVS_QUIET_MODE"
-  echo "- PHP_DEFAULT_VERSION: ${PHP_DEFAULT_VERSION:-"not set"}"
+  echo "- PHP_DEFAULT_VERSION: ${PHP_DEFAULT_VERSION:-"not set (newest available version)"}"
 }
 
 # Show help
@@ -364,18 +364,18 @@ pvs_help() {
   echo "# Quiet mode - less verbose output (default: false)"
   echo "export PVS_QUIET_MODE=false"
   echo ""
-  echo "# Default PHP version when no .php-version file found"
+  echo "# Default PHP version when no $PVS_VERSION_FILE file found"
   echo "export PHP_DEFAULT_VERSION=8.1"
 
   echo ""
   echo "Available commands:"
-  echo "- pvs_switch <version> # Manually switch version"
-  echo "- pvs_use <version>    # Create .php-version file and switch"
-  echo "- pvs_info             # Show current status"
-  echo "- pvs_help             # Show this help"
+  echo "- pvs_use [version]   # Manually switch version"
+  echo "- pvs_local <version> # Create $PVS_VERSION_FILE file"
+  echo "- pvs_info            # Show current status"
+  echo "- pvs_help            # Show this help"
   echo ""
   echo "How it works:"
-  echo "- Creates symlinks in $(pvs_get_php_bin_dir)"
+  echo "- Creates symlinks in $PVS_BIN_DIR"
   echo "- Prepends that directory to PATH"
   echo "- No system modifications required"
 }
@@ -386,7 +386,7 @@ pvs_init() {
   pvs_store_original_path
 
   # Create bin directory
-  mkdir -p "$(pvs_get_php_bin_dir)"
+  mkdir -p "$PVS_BIN_DIR"
 
   # Add the hook to chpwd_functions if it's not already there
   if [[ ! " ${chpwd_functions[@]} " =~ " pvs_chpwd_hook " ]]; then

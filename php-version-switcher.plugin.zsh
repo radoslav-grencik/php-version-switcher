@@ -4,11 +4,17 @@
 # Automatically switches PHP versions based on .php-version files
 # Uses PATH manipulation for user-level version management
 
-# Plugin configuration
-PVS_VERSION_FILE=".php-version"
 PVS_CURRENT_VERSION=""
 PVS_LAST_CHECKED_DIR=""
 PVS_ORIGINAL_PATH=""
+PVS_INSTALL_COMMAND="sudo apt install"
+
+# Plugin configuration - can be overridden by environment variables
+PVS_VERSION_FILE="${PVS_VERSION_FILE:-.php-version}"
+PVS_BIN_DIR="${PVS_BIN_DIR:-${HOME}/.local/bin/pvs}"
+PVS_PHP_INSTALL_PATH="${PVS_PHP_INSTALL_PATH:-/usr/bin}"
+PVS_AUTO_SWITCH="${PVS_AUTO_SWITCH:-true}"
+PVS_QUIET_MODE="${PVS_QUIET_MODE:-false}"
 
 # Color codes for output
 PVS_COLOR_SUCCESS="\033[0;32m"
@@ -19,6 +25,11 @@ PVS_COLOR_RESET="\033[0m"
 
 # Logging function
 pvs_log() {
+  # Skip logging in quiet mode unless it's an error
+  if [[ "$PVS_QUIET_MODE" == "true" && "$1" != "error" ]]; then
+    return
+  fi
+
   local level=$1
   shift
   local message="$@"
@@ -61,7 +72,7 @@ pvs_get_current_version() {
 # Get all available PHP versions
 pvs_get_available_versions() {
   local versions=()
-  for php_bin in /usr/bin/php[0-9]*; do
+  for php_bin in ${PVS_PHP_INSTALL_PATH}/php[0-9]*; do
     if [[ -x "$php_bin" ]]; then
       local version=$(echo "$php_bin" | grep -oP 'php\K[0-9]+\.[0-9]+')
       if [[ -n "$version" ]]; then
@@ -85,12 +96,12 @@ pvs_get_newest_version() {
 # Check if PHP version is installed
 pvs_is_version_installed() {
   local version=$1
-  [[ -x "/usr/bin/php$version" ]]
+  [[ -x "${PVS_PHP_INSTALL_PATH}/php$version" ]]
 }
 
 # Create a temporary directory for PHP version links
 pvs_get_php_bin_dir() {
-  echo "${HOME}/.local/bin/pvs"
+  echo "$PVS_BIN_DIR"
 }
 
 # Setup PHP version in PATH
@@ -105,7 +116,7 @@ pvs_setup_php_path() {
   rm -f "$php_bin_dir/php"
 
   # Create new symlink
-  ln -sf "/usr/bin/php$version" "$php_bin_dir/php"
+  ln -sf "${PVS_PHP_INSTALL_PATH}/php$version" "$php_bin_dir/php"
 
   # Update PATH to include our bin directory first
   export PATH="$php_bin_dir:$PVS_ORIGINAL_PATH"
@@ -122,8 +133,8 @@ pvs_switch_to_version() {
 
   # Check if version is installed
   if ! pvs_is_version_installed "$version"; then
-    pvs_log "error" "PHP $version is not installed at /usr/bin/php$version"
-    pvs_log "info" "Install it with: sudo apt install php$version"
+    pvs_log "error" "PHP $version is not installed at ${PVS_PHP_INSTALL_PATH}/php$version"
+    pvs_log "info" "Install it with: $PVS_INSTALL_COMMAND php$version"
     return 1
   fi
 
@@ -216,6 +227,11 @@ pvs_handle_version_switch() {
 
 # Hook function for directory changes
 pvs_chpwd_hook() {
+  # Skip if auto-switch is disabled
+  if [[ "$PVS_AUTO_SWITCH" != "true" ]]; then
+    return
+  fi
+
   # Only check if we've changed directories
   if [[ "$PWD" != "$PVS_LAST_CHECKED_DIR" ]]; then
     PVS_LAST_CHECKED_DIR="$PWD"
@@ -224,79 +240,6 @@ pvs_chpwd_hook() {
 }
 
 # Utility Functions
-
-# Create .php-version file with specified version
-pvs_use() {
-  local version=$1
-
-  if [[ -z "$version" ]]; then
-    pvs_log "error" "Usage: pvs_use <version>"
-    pvs_log "info" "Example: pvs_use 8.1"
-    return 1
-  fi
-
-  # Validate version format
-  if [[ ! "$version" =~ ^[0-9]+\.[0-9]+$ ]]; then
-    pvs_log "error" "Invalid version format. Use format like: 8.1"
-    return 1
-  fi
-
-  # Check if version is available
-  if ! pvs_is_version_installed "$version"; then
-    pvs_log "error" "PHP $version is not installed at /usr/bin/php$version"
-    pvs_log "info" "Install it with: sudo apt install php$version"
-    return 1
-  fi
-
-  # Create .php-version file
-  echo "$version" >"$PVS_VERSION_FILE"
-  pvs_log "success" "Created $PVS_VERSION_FILE with PHP $version"
-
-  # Switch to the version immediately
-  pvs_switch_to_version "$version"
-}
-
-# Show current status and available versions
-pvs_info() {
-  echo "PHP Version Switcher Status"
-  echo "=========================="
-
-  local current_version=$(pvs_get_current_version)
-  echo "Current PHP version: $current_version"
-
-  local current_php_path=$(which php 2>/dev/null)
-  echo "Current PHP path: ${current_php_path:-"not found"}"
-
-  local version_file=$(pvs_find_version_file)
-  if [[ -n "$version_file" ]]; then
-    local file_version=$(pvs_read_version_file "$version_file")
-    echo "Version file: $version_file ($file_version)"
-  else
-    echo "Version file: Not found"
-  fi
-
-  if [[ -n "$PHP_DEFAULT_VERSION" ]]; then
-    echo "Default version (env): $PHP_DEFAULT_VERSION"
-  else
-    echo "Default version (env): Not set"
-  fi
-
-  echo ""
-  echo "Available PHP versions:"
-  local versions=($(pvs_get_available_versions))
-  for version in "${versions[@]}"; do
-    local php_path="/usr/bin/php$version"
-    if [[ "$version" == "$current_version" ]]; then
-      echo "  * $version ($php_path)"
-    else
-      echo "    $version ($php_path)"
-    fi
-  done
-
-  echo ""
-  echo "Plugin uses PATH manipulation (no sudo required)"
-  echo "PHP symlinks stored in: $(pvs_get_php_bin_dir)"
-}
 
 # Manually switch to specific version
 pvs_switch() {
@@ -317,55 +260,122 @@ pvs_switch() {
   pvs_switch_to_version "$version"
 }
 
-# Show setup information
-pvs_setup() {
-  echo "PHP Version Switcher Setup"
-  echo "========================="
+# Create .php-version file with specified version
+pvs_use() {
+  local version=$1
 
-  echo "This plugin uses PATH manipulation instead of update-alternatives."
-  echo "No sudo required for switching versions!"
+  if [[ -z "$version" ]]; then
+    pvs_log "error" "Usage: pvs_use <version>"
+    pvs_log "info" "Example: pvs_use 8.1"
+    return 1
+  fi
+
+  # Validate version format
+  if [[ ! "$version" =~ ^[0-9]+\.[0-9]+$ ]]; then
+    pvs_log "error" "Invalid version format. Use format like: 8.1"
+    return 1
+  fi
+
+  # Check if version is available
+  if ! pvs_is_version_installed "$version"; then
+    pvs_log "error" "PHP $version is not installed at ${PVS_PHP_INSTALL_PATH}/php$version"
+    pvs_log "info" "Install it with: $PVS_INSTALL_COMMAND php$version"
+    return 1
+  fi
+
+  # Create .php-version file
+  echo "$version" >"$PVS_VERSION_FILE"
+  pvs_log "success" "Created $PVS_VERSION_FILE with PHP $version"
+
+  # Switch to the version immediately
+  pvs_switch_to_version "$version"
+}
+
+# Show current status and available versions
+pvs_info() {
+  echo "PHP Version Switcher Status"
+  echo "==========================="
   echo ""
 
-  local versions=($(pvs_get_available_versions))
-  local missing_versions=()
+  local current_version=$(pvs_get_current_version)
+  echo "Current PHP version: $current_version"
 
+  local current_php_path=$(which php 2>/dev/null)
+  echo "Current PHP path: ${current_php_path:-"not found"}"
+
+  echo "PHP symlinks stored in: $(pvs_get_php_bin_dir)"
+
+  local version_file=$(pvs_find_version_file)
+  if [[ -n "$version_file" ]]; then
+    local file_version=$(pvs_read_version_file "$version_file")
+    echo "Version file: $version_file ($file_version)"
+  else
+    echo "Version file: Not found"
+  fi
+
+  if [[ -n "$PHP_DEFAULT_VERSION" ]]; then
+    echo "Default version (env): $PHP_DEFAULT_VERSION"
+  else
+    echo "Default version (env): Not set"
+  fi
+
+  echo ""
   echo "Available PHP versions:"
+  local versions=($(pvs_get_available_versions))
   for version in "${versions[@]}"; do
-    echo "  ✓ PHP $version (/usr/bin/php$version)"
-  done
-
-  echo ""
-  echo "Common PHP versions you might want to install:"
-  for check_version in "7.4" "8.0" "8.1" "8.2" "8.3"; do
-    if ! pvs_is_version_installed "$check_version"; then
-      missing_versions+=("$check_version")
+    local php_path="${PVS_PHP_INSTALL_PATH}/php$version"
+    if [[ "$version" == "$current_version" ]]; then
+      echo "  * $version ($php_path)"
+    else
+      echo "    $version ($php_path)"
     fi
   done
 
-  if [[ ${#missing_versions[@]} -gt 0 ]]; then
-    echo "Missing versions (install with):"
-    for version in "${missing_versions[@]}"; do
-      echo "  sudo apt install php$version"
-    done
-    echo ""
-  fi
-
-  echo "Environment variable for default version (optional):"
-  echo "export PHP_DEFAULT_VERSION=8.1  # Add to ~/.zshrc"
-
   echo ""
-  echo "Plugin files:"
-  echo "- $PVS_VERSION_FILE: Contains project-specific PHP version"
-  echo "- $(pvs_get_php_bin_dir): Directory for PHP symlinks"
+  echo "Configuration (environment variables):"
+  echo "- PVS_VERSION_FILE: $PVS_VERSION_FILE"
+  echo "- PVS_BIN_DIR: $PVS_BIN_DIR"
+  echo "- PVS_PHP_INSTALL_PATH: $PVS_PHP_INSTALL_PATH"
+  echo "- PVS_AUTO_SWITCH: $PVS_AUTO_SWITCH"
+  echo "- PVS_QUIET_MODE: $PVS_QUIET_MODE"
+  echo "- PHP_DEFAULT_VERSION: ${PHP_DEFAULT_VERSION:-"not set"}"
+}
+
+# Show help
+pvs_help() {
+  echo "PHP Version Switcher Help"
+  echo "========================="
+  echo ""
+
+  echo "Environment variables for configuration:"
+  echo ""
+  echo "# Version file name (default: .php-version)"
+  echo "export PVS_VERSION_FILE='.php-version'"
+  echo ""
+  echo "# Directory for PHP symlinks (default: ~/.local/bin/pvs)"
+  echo "export PVS_BIN_DIR=\"\$HOME/.local/bin/pvs\""
+  echo ""
+  echo "# PHP installation path (default: /usr/bin)"
+  echo "export PVS_PHP_INSTALL_PATH='/usr/bin'"
+  echo ""
+  echo "# Auto-switch when changing directories (default: true)"
+  echo "export PVS_AUTO_SWITCH=true"
+  echo ""
+  echo "# Quiet mode - less verbose output (default: false)"
+  echo "export PVS_QUIET_MODE=false"
+  echo ""
+  echo "# Default PHP version when no .php-version file found"
+  echo "export PHP_DEFAULT_VERSION=8.1"
+
   echo ""
   echo "Available commands:"
+  echo "- pvs_switch <version> # Manually switch version"
   echo "- pvs_use <version>    # Create .php-version file and switch"
   echo "- pvs_info             # Show current status"
-  echo "- pvs_switch <version> # Manually switch version"
-  echo "- pvs_setup            # Show this help"
+  echo "- pvs_help             # Show this help"
   echo ""
   echo "How it works:"
-  echo "- Creates symlinks in ~/.local/bin/pvs/"
+  echo "- Creates symlinks in $(pvs_get_php_bin_dir)"
   echo "- Prepends that directory to PATH"
   echo "- No system modifications required"
 }

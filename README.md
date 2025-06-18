@@ -1,6 +1,6 @@
 # PHP Version Switcher (PVS)
 
-PHP Version Switcher (PVS) Plugin for [Oh My Zsh](https://github.com/robbyrussell/oh-my-zsh). Automatically
+PHP Version Switcher (PVS) - plugin for [Oh My Zsh](https://github.com/robbyrussell/oh-my-zsh). Automatically
 switches PHP versions based on `.php-version` files. Uses PATH manipulation for user-level version management.
 
 ## Install
@@ -47,7 +47,7 @@ To show the current status, use `pvs_info`:
 pvs_info
 ```
 
-This will show the current PHP version, the current PHP path, and the version file.
+This will show the current PHP version, the version file and other information.
 
 ### Showing help
 

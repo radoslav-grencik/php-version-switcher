@@ -1,6 +1,6 @@
 #!/usr/bin/env zsh
 
-# PHP Version Switcher (PVS) Plugin for Oh My Zsh
+# PHP Version Switcher (PVS) - plugin for Oh My Zsh
 # Automatically switches PHP versions based on .php-version files
 # Uses PATH manipulation for user-level version management
 

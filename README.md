@@ -25,7 +25,7 @@ Reload the shell.
 To switch to a specific version, use `pvs_use [version]`:
 
 ```sh
-pvs_use     # switch to version defined in .php-version file
+pvs_use     # switch to version defined in .php-version file or default version when no .php-version file found
 pvs_use 8.2 # switch to specific version
 ```
 
@@ -65,7 +65,11 @@ The plugin can be configured with environment variables. The following variables
 
 - `PVS_VERSION_FILE`: Version file name (default: `.php-version`)
 - `PVS_BIN_DIR`: Directory for PHP symlinks (default: `~/.local/bin/pvs`)
-- `PVS_PHP_INSTALL_PATH`: PHP installation path (default: `/usr/bin`)
+- `PVS_PHP_INSTALL_DIR`: PHP installation directory (default: `/usr/bin`)
 - `PVS_AUTO_SWITCH`: Auto-switch when changing directories (default: `true`)
 - `PVS_QUIET_MODE`: Quiet mode - less verbose output (default: `false`)
 - `PHP_DEFAULT_VERSION`: Default PHP version when no `.php-version` file found
+
+## License
+
+This project is licensed under the [MIT License](LICENSE).

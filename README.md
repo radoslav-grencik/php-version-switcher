@@ -18,6 +18,15 @@ plugins=(... php-version-switcher)
 
 Reload the shell.
 
+## Update
+
+```sh
+cd ~/.oh-my-zsh/custom/plugins/php-version-switcher
+git pull
+```
+
+Reload the shell.
+
 ## Usage
 
 ### Switching versions
@@ -39,9 +48,9 @@ pvs_local 8.2
 
 This will create a `.php-version` file with the specified version.
 
-### Showing current status
+### Showing current info
 
-To show the current status, use `pvs_info`:
+To show the current info, use `pvs_info`:
 
 ```sh
 pvs_info
@@ -65,10 +74,11 @@ The plugin can be configured with environment variables. The following variables
 
 - `PVS_VERSION_FILE`: Version file name (default: `.php-version`)
 - `PVS_BIN_DIR`: Directory for PHP symlinks (default: `~/.local/bin/pvs`)
-- `PVS_PHP_INSTALL_DIR`: PHP installation directory (default: `/usr/bin`)
+- `PVS_PHP_INSTALL_DIR`: PHP installation directory (default: `auto-detected`)
 - `PVS_AUTO_SWITCH`: Auto-switch when changing directories (default: `true`)
 - `PVS_QUIET_MODE`: Quiet mode - less verbose output (default: `false`)
-- `PHP_DEFAULT_VERSION`: Default PHP version when no `.php-version` file found
+- `PHP_DEFAULT_VERSION`: Default PHP version when no `.php-version` file found (default:
+  `newest available version`)
 
 ## License
 

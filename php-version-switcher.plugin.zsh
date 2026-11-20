@@ -331,7 +331,6 @@ _pvs_auto_switch_version() {
 
   if file_info=$(_pvs_get_version_from_file); then
     read -r version version_file <<<"$file_info"
-    _pvs_log "info" "Found version file $version_file ($version)"
   elif [[ $? -ne 1 ]]; then
     return 0
   fi
@@ -344,11 +343,11 @@ _pvs_auto_switch_version() {
   current_version=$(_pvs_get_current_version)
 
   if [[ "$current_version" == "$version" ]]; then
-    if [[ -n "$version_file" ]]; then
-      _pvs_log "info" "Already using PHP $current_version"
-    fi
-
     return 0
+  fi
+
+  if [[ -n "$version_file" ]]; then
+    _pvs_log "info" "Found version file $version_file ($version)"
   fi
 
   _pvs_switch_to_version "$version"

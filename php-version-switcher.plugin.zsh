@@ -72,7 +72,7 @@ _pvs_log() {
     echo -e "${PVS_COLOR_SUCCESS}[PVS]${PVS_COLOR_RESET} $message"
     ;;
   "error")
-    echo -e "${PVS_COLOR_ERROR}[PVS ERROR]${PVS_COLOR_RESET} $message"
+    echo -e "${PVS_COLOR_ERROR}[PVS ERROR]${PVS_COLOR_RESET} $message" >&2
     ;;
   "warning")
     echo -e "${PVS_COLOR_WARNING}[PVS WARNING]${PVS_COLOR_RESET} $message"
@@ -190,32 +190,42 @@ _pvs_get_default_version() {
     return 0
   fi
 
-  IFS=' ' read -rA versions <<<"$(_pvs_get_available_versions)"
-
-  if [[ ${#versions[@]} -gt 0 ]]; then
-    echo "${versions[-1]}"
+  local available_versions
+  if ! available_versions=${1-$(_pvs_get_available_versions)} || [[ -z "$available_versions" ]]; then
+    return 1
   fi
+
+  local -a versions
+  IFS=' ' read -rA versions <<<"$available_versions"
+
+  echo "${versions[-1]}"
 }
 
+# Return 1 for a missing file and 2 for an unusable file.
 _pvs_get_version_from_file() {
   local dir="$PWD"
 
   while [[ "$dir" != "/" ]]; do
     local version_file="$dir/$PVS_VERSION_FILE"
 
-    if [[ -f "$version_file" && -r "$version_file" ]]; then
+    if [[ -f "$version_file" ]]; then
       local version
-      version=$(grep -oE "$PVS_VERSION_REGEX" "$version_file" | head -1 | tr -d '[:space:]')
 
-      if [[ -n "$version" ]]; then
-        echo "$version $version_file"
+      if ! version=$(<"$version_file") 2>/dev/null; then
+        _pvs_log "error" "Could not read version file $version_file"
 
-        return 0
+        return 2
       fi
 
-      _pvs_log "error" "Invalid version format in $version_file. Use format like 8.2"
+      if ! _pvs_validate_version_format "$version"; then
+        _pvs_log "error" "Invalid version format in $version_file. Use format like 8.2"
 
-      return 1
+        return 2
+      fi
+
+      printf '%s %s\n' "$version" "$version_file"
+
+      return 0
     fi
 
     dir=${dir%/*}
@@ -317,34 +327,33 @@ _pvs_switch_to_version() {
 }
 
 _pvs_auto_switch_version() {
-  read -r version version_file < <(_pvs_get_version_from_file)
+  local version version_file file_info
 
-  if [[ -n "$version" ]]; then
+  if file_info=$(_pvs_get_version_from_file); then
+    read -r version version_file <<<"$file_info"
     _pvs_log "info" "Found version file $version_file ($version)"
+  elif [[ $? -ne 1 ]]; then
+    return 0
   fi
 
-  if [[ -z "$version" ]]; then
-    version=$(_pvs_get_default_version)
+  if [[ -z "$version" ]] && ! version=$(_pvs_get_default_version); then
+    return 0
   fi
 
-  if [[ -n "$version" ]]; then
-    local current_version
-    current_version=$(_pvs_get_current_version)
+  local current_version
+  current_version=$(_pvs_get_current_version)
 
-    if [[ "$current_version" == "$version" ]]; then
-      if [[ -n "$version_file" ]]; then
-        _pvs_log "info" "Already using PHP $current_version"
-      fi
-
-      return 0
+  if [[ "$current_version" == "$version" ]]; then
+    if [[ -n "$version_file" ]]; then
+      _pvs_log "info" "Already using PHP $current_version"
     fi
-
-    _pvs_switch_to_version "$version"
 
     return 0
   fi
 
-  _pvs_log "warning" "No PHP versions found"
+  _pvs_switch_to_version "$version"
+
+  return 0
 }
 
 _pvs_chpwd_hook() {
@@ -363,32 +372,26 @@ _pvs_chpwd_hook() {
 
 pvs_use() {
   local version=$1
+  local version_file file_info
   local log=""
 
-  if [[ -n "$version" ]]; then
+  if [[ -z "$version" ]]; then
+    if file_info=$(_pvs_get_version_from_file); then
+      read -r version version_file <<<"$file_info"
+      log="Using PHP version from: $version_file ($version)"
+    elif [[ $? -ne 1 ]]; then
+      return 1
+    fi
+  elif [[ "$version" != "default" ]]; then
     log="Using provided PHP version: $version"
   fi
 
-  if [[ -z "$version" ]]; then
-    read -r version version_file < <(_pvs_get_version_from_file)
-
-    if [[ -n "$version" ]]; then
-      log="Using PHP version from: $version_file ($version)"
+  if [[ -z "$version" || "$version" == "default" ]]; then
+    if ! version=$(_pvs_get_default_version); then
+      return 1
     fi
-  fi
 
-  if [[ -z "$version" ]]; then
-    version=$(_pvs_get_default_version)
-
-    if [[ -n "$version" ]]; then
-      log="Using default PHP version: $version"
-    fi
-  fi
-
-  if [[ -z "$version" ]]; then
-    _pvs_log "error" "No PHP versions found"
-
-    return 1
+    log="Using default PHP version: $version"
   fi
 
   if ! _pvs_validate_version_format "$version"; then
@@ -435,24 +438,28 @@ pvs_local() {
 }
 
 pvs_info() {
+  echo ""
   echo "PHP Version Switcher Info"
   echo "========================="
   echo ""
 
-  local current_version
-  local default_version
+  local current_version default_version available_versions
+  local file_info file_version version_file
+  local -a versions
+
   current_version=$(_pvs_get_current_version)
-  default_version=$(_pvs_get_default_version)
-  read -r file_version version_file < <(_pvs_get_version_from_file)
+  available_versions=$(_pvs_get_available_versions) || available_versions=""
+  default_version=$(_pvs_get_default_version "$available_versions") || default_version=""
 
   echo "Current PHP version: ${current_version:-"none"}"
-
   echo "Default PHP version: ${default_version:-"none"}"
-
   echo "PHP symlinks stored in: $PVS_BIN_DIR"
 
-  if [[ -n "$file_version" ]]; then
+  if file_info=$(_pvs_get_version_from_file); then
+    read -r file_version version_file <<<"$file_info"
     echo "Version file: $version_file ($file_version)"
+  elif [[ $? -ne 1 ]]; then
+    echo "Version file: invalid or unreadable"
   else
     echo "Version file: not found"
   fi
@@ -460,7 +467,7 @@ pvs_info() {
   echo ""
   echo "Available PHP versions:"
 
-  IFS=' ' read -rA versions <<<"$(_pvs_get_available_versions)"
+  IFS=' ' read -rA versions <<<"$available_versions"
 
   local install_dir
   install_dir=$(_pvs_get_php_install_dir)
@@ -489,9 +496,11 @@ pvs_info() {
   echo "- PVS_AUTO_SWITCH: $PVS_AUTO_SWITCH"
   echo "- PVS_QUIET_MODE: $PVS_QUIET_MODE"
   echo "- PHP_DEFAULT_VERSION: ${PHP_DEFAULT_VERSION:-"not set (newest available version)"}"
+  echo ""
 }
 
 pvs_help() {
+  echo ""
   echo "PHP Version Switcher Help"
   echo "========================="
   echo ""
@@ -518,15 +527,16 @@ pvs_help() {
 
   echo ""
   echo "Available commands:"
-  echo "- pvs_use [version]   # Manually switch version"
-  echo "- pvs_local <version> # Create $PVS_VERSION_FILE file"
-  echo "- pvs_info            # Show current info"
-  echo "- pvs_help            # Show this help"
+  echo "- pvs_use [version|default] # Manually switch version"
+  echo "- pvs_local <version>       # Create $PVS_VERSION_FILE file"
+  echo "- pvs_info                  # Show current info"
+  echo "- pvs_help                  # Show this help"
   echo ""
   echo "How it works:"
   echo "- Creates symlinks in $PVS_BIN_DIR"
   echo "- Prepends that directory to PATH"
   echo "- No system modifications required"
+  echo ""
 }
 
 # -------------------------- Run ------------------------- #

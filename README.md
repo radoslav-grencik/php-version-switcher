@@ -31,12 +31,16 @@ Reload the shell.
 
 ### Switching versions
 
-To switch to a specific version, use `pvs_use [version]`:
+To switch PHP versions, use `pvs_use [version|default]`:
 
 ```sh
-pvs_use     # switch to version defined in .php-version file or default version when no .php-version file found
-pvs_use 8.2 # switch to specific version
+pvs_use         # use .php-version or fall back to the default version
+pvs_use 8.2     # switch to a specific version
+pvs_use default # switch to default version
 ```
+
+If the nearest `.php-version` is invalid, `pvs_use` without arguments and automatic switching leave the
+current PHP version unchanged.
 
 ### Creating .php-version files
 

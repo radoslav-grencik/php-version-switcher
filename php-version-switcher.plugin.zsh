@@ -323,11 +323,14 @@ _pvs_switch_to_version() {
     return 1
   fi
 
-  _pvs_log "success" "Switched to PHP $version"
+  if [[ "${2-}" != "quiet" ]]; then
+    _pvs_log "success" "Switched to PHP $version"
+  fi
 }
 
 _pvs_auto_switch_version() {
   local version version_file file_info
+  local quiet=""
 
   if file_info=$(_pvs_get_version_from_file); then
     read -r version version_file <<<"$file_info"
@@ -348,9 +351,11 @@ _pvs_auto_switch_version() {
 
   if [[ -n "$version_file" ]]; then
     _pvs_log "info" "Found version file $version_file ($version)"
+  elif [[ "${1-}" == "startup" ]]; then
+    quiet="quiet"
   fi
 
-  _pvs_switch_to_version "$version"
+  _pvs_switch_to_version "$version" "$quiet"
 
   return 0
 }
@@ -544,4 +549,4 @@ if ! printf '%s\n' "${chpwd_functions[@]}" | grep -qFx _pvs_chpwd_hook; then
   chpwd_functions+=(_pvs_chpwd_hook)
 fi
 
-_pvs_auto_switch_version
+_pvs_auto_switch_version startup
